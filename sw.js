@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wardrobe-v1';
+const CACHE_NAME = 'wardrobe-v2';
 const URLS_TO_CACHE = ['./index.html', './manifest.json', './share-handler.html'];
 
 self.addEventListener('install', (event) => {
@@ -46,10 +46,24 @@ async function handleSharePost(request){
 
     const payload = { url, text, title, images: imageDataUrls, receivedAt: new Date().toISOString() };
 
-    const cache = await caches.open('wardrobe-share-data');
-    await cache.put('/__share-payload', new Response(JSON.stringify(payload), {
-      headers: {'Content-Type':'application/json'}
-    }));
+    // Append to IDB queue (autoIncrement key) so multiple shares accumulate
+    // rather than overwriting each other
+    await new Promise((resolve, reject)=>{
+      const dbReq = indexedDB.open('wardrobe-share-handoff', 2);
+      dbReq.onupgradeneeded = (e)=>{
+        const db = e.target.result;
+        if(db.objectStoreNames.contains('pending')) db.deleteObjectStore('pending');
+        if(!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', {autoIncrement:true});
+      };
+      dbReq.onsuccess = ()=>{
+        const db = dbReq.result;
+        const tx = db.transaction('queue','readwrite');
+        tx.objectStore('queue').add(payload);
+        tx.oncomplete = resolve;
+        tx.onerror = reject;
+      };
+      dbReq.onerror = reject;
+    });
   }catch(err){
     console.error('share post handling failed', err);
   }
