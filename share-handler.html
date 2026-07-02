@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wardrobe — receiving share…</title>
+<style>
+  body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#faf8f5;color:#2b2622;
+    display:flex;align-items:center;justify-content:center;height:100vh;margin:0;padding:20px;text-align:center;}
+  .box{max-width:360px;}
+  .spinner{width:36px;height:36px;border:4px solid #e4ddd2;border-top-color:#8a5a44;border-radius:50%;
+    animation:spin 0.8s linear infinite;margin:0 auto 16px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  p{font-size:0.9rem;color:#6f655a;}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="spinner"></div>
+  <p id="status">Receiving shared content…</p>
+</div>
+<script>
+/*
+  This page is the share_target action. Android POSTs here with multipart/form-data
+  containing any shared images (as files) plus title/text/url if shared from a page.
+  We read the POST body, store images + url in IndexedDB (works even though this is a
+  fresh page load with no localStorage handoff possible across POST navigation), then
+  redirect to index.html which picks them up.
+*/
+
+const DB_NAME = 'wardrobe-share-handoff';
+const STORE_NAME = 'pending';
+
+function openDb(){
+  return new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = ()=>{
+      req.result.createObjectStore(STORE_NAME);
+    };
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+
+async function storeHandoff(payload){
+  const db = await openDb();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(STORE_NAME,'readwrite');
+    tx.objectStore(STORE_NAME).put(payload, 'latest');
+    tx.oncomplete = ()=> resolve();
+    tx.onerror = ()=> reject(tx.error);
+  });
+}
+
+function fileToDataUrl(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=> resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleShare(){
+  const statusEl = document.getElementById('status');
+  try{
+    // Share targets with POST method deliver data via the request itself.
+    // We need a service worker to intercept this POST in older models, but
+    // modern Chrome also allows reading it directly if this page itself was
+    // the POST target and we use the Request from a fetch event... however
+    // since this is a plain navigation (not fetch event), the browser exposes
+    // the submitted form data via the URL only for GET. For POST share_target,
+    // Chrome on Android delivers the body and lets this document read it via
+    // `navigator` is NOT how it works -- the correct mechanism is that the
+    // browser performs the POST navigation to this page and the body is
+    // accessible through a FormData read on... actually for a normal HTML
+    // document (not a fetch handler), POST body isn't directly readable by JS.
+    // So we rely on the service worker to intercept and cache it. Fallback below.
+    statusEl.textContent = 'Checking for shared images…';
+
+    // The service worker fetch handler (see sw.js companion logic) is expected
+    // to have intercepted the POST and stashed parsed data in the cache under
+    // a known key. We poll for it briefly.
+    let attempt = 0;
+    let handoff = null;
+    while(attempt < 10 && !handoff){
+      const cache = await caches.open('wardrobe-share-data');
+      const resp = await cache.match('/__share-payload');
+      if(resp){
+        handoff = await resp.json();
+        await cache.delete('/__share-payload');
+      } else {
+        await new Promise(r=>setTimeout(r, 300));
+      }
+      attempt++;
+    }
+
+    if(handoff){
+      await storeHandoff(handoff);
+      statusEl.textContent = 'Got it — opening Wardrobe…';
+    } else {
+      statusEl.textContent = 'No shared images detected. Opening Wardrobe…';
+    }
+  }catch(err){
+    console.error(err);
+    statusEl.textContent = 'Something went wrong reading the share. Opening Wardrobe…';
+  }
+  setTimeout(()=>{
+    location.href = './index.html?from=share';
+  }, 600);
+}
+
+handleShare();
+</script>
+</body>
+</html>

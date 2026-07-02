@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Wardrobe</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#8a5a44">
+<style>
+  :root{
+    --bg:#faf8f5;
+    --panel:#ffffff;
+    --line:#e4ddd2;
+    --ink:#2b2622;
+    --ink-soft:#6f655a;
+    --accent:#8a5a44;
+    --accent-soft:#f1e3da;
+    --tag-bg:#eee7da;
+    --danger:#a3403a;
+    --radius:10px;
+    font-size:16px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+  body{padding-bottom:72px;}
+  h1,h2,h3{font-family:Georgia,'Times New Roman',serif;font-weight:600;margin:0;}
+  button{font-family:inherit;cursor:pointer;}
+  input,textarea,select{font-family:inherit;}
+
+  /* top bar */
+  header.topbar{
+    position:sticky;top:0;z-index:50;
+    background:var(--panel);
+    border-bottom:1px solid var(--line);
+    padding:10px 14px;
+    display:flex;align-items:center;gap:10px;
+    flex-wrap:wrap;
+  }
+  header.topbar h1{font-size:1.25rem;color:var(--accent);flex:0 0 auto;}
+  .topbar-spacer{flex:1 1 auto;}
+  .icon-btn{
+    background:none;border:1px solid var(--line);border-radius:8px;
+    padding:8px 12px;font-size:0.85rem;color:var(--ink);
+  }
+  .icon-btn:active{background:var(--accent-soft);}
+  .icon-btn.primary{background:var(--accent);color:white;border-color:var(--accent);}
+
+  nav.tabs{
+    display:flex;gap:0;border-bottom:1px solid var(--line);background:var(--panel);
+    position:sticky;top:53px;z-index:49;
+    overflow-x:auto;
+  }
+  nav.tabs button{
+    flex:1 1 auto;padding:10px 8px;background:none;border:none;border-bottom:3px solid transparent;
+    font-size:0.85rem;color:var(--ink-soft);white-space:nowrap;
+  }
+  nav.tabs button.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+
+  main{padding:14px;max-width:1100px;margin:0 auto;}
+
+  /* filter bar */
+  .filterbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;}
+  .filterbar input[type=text]{
+    flex:1 1 160px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:0.9rem;
+  }
+  .tagchip{
+    display:inline-flex;align-items:center;gap:4px;
+    background:var(--tag-bg);color:var(--ink);border-radius:999px;
+    padding:5px 11px;font-size:0.78rem;border:1px solid transparent;cursor:pointer;user-select:none;
+  }
+  .tagchip.active{background:var(--accent);color:white;}
+
+  /* grid */
+  .grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;
+  }
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;cursor:pointer;display:flex;flex-direction:column;
+  }
+  .card .thumb{
+    width:100%;aspect-ratio:3/4;background:var(--accent-soft);
+    display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;
+  }
+  .card .thumb img{width:100%;height:100%;object-fit:cover;}
+  .card .thumb .count{
+    position:absolute;bottom:5px;right:5px;background:rgba(0,0,0,0.55);color:#fff;
+    font-size:0.68rem;padding:2px 6px;border-radius:999px;
+  }
+  .card .meta{padding:8px 10px;}
+  .card .meta .name{font-size:0.85rem;font-weight:600;line-height:1.2;}
+  .card .meta .tags{margin-top:4px;font-size:0.7rem;color:var(--ink-soft);}
+  .empty-state{
+    text-align:center;color:var(--ink-soft);padding:60px 20px;font-size:0.95rem;
+  }
+  .empty-state button{margin-top:14px;}
+
+  /* fab */
+  .fab{
+    position:fixed;bottom:18px;right:18px;z-index:60;
+    background:var(--accent);color:white;border:none;border-radius:999px;
+    width:56px;height:56px;font-size:1.6rem;box-shadow:0 4px 12px rgba(0,0,0,0.2);
+  }
+
+  /* modal/sheet */
+  .overlay{
+    position:fixed;inset:0;background:rgba(20,16,12,0.45);z-index:100;
+    display:flex;align-items:flex-end;justify-content:center;
+  }
+  .overlay.center{align-items:center;}
+  .sheet{
+    background:var(--panel);width:100%;max-width:640px;max-height:92vh;overflow-y:auto;
+    border-radius:16px 16px 0 0;padding:18px;
+  }
+  .overlay.center .sheet{border-radius:14px;max-height:88vh;}
+  .sheet h2{font-size:1.15rem;color:var(--accent);margin-bottom:14px;}
+  .sheet-close{
+    float:right;background:none;border:none;font-size:1.3rem;color:var(--ink-soft);line-height:1;
+  }
+  label.field{display:block;margin-bottom:14px;}
+  label.field .label-text{display:block;font-size:0.78rem;color:var(--ink-soft);margin-bottom:5px;}
+  label.field input[type=text],label.field textarea{
+    width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:0.95rem;background:var(--bg);
+  }
+  label.field textarea{resize:vertical;min-height:60px;}
+
+  .imgrow{display:flex;gap:8px;overflow-x:auto;padding:4px 0 8px;}
+  .imgrow .imgwrap{position:relative;flex:0 0 auto;width:96px;height:120px;border-radius:8px;overflow:hidden;border:1px solid var(--line);}
+  .imgrow .imgwrap img{width:100%;height:100%;object-fit:cover;}
+  .imgrow .imgwrap .rm{
+    position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:#fff;border:none;
+    width:20px;height:20px;border-radius:50%;font-size:0.75rem;line-height:1;
+  }
+  .imgrow .addbtn{
+    flex:0 0 auto;width:96px;height:120px;border:2px dashed var(--line);border-radius:8px;
+    background:none;color:var(--ink-soft);font-size:0.78rem;
+  }
+
+  .tageditor{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;}
+  .tageditor .tagchip .x{margin-left:2px;font-weight:bold;}
+
+  .btnrow{display:flex;gap:10px;margin-top:18px;}
+  .btnrow button{flex:1;padding:11px;border-radius:8px;font-size:0.92rem;border:1px solid var(--line);background:var(--bg);}
+  .btnrow button.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btnrow button.danger{color:var(--danger);border-color:var(--danger);background:none;}
+
+  /* item detail viewer */
+  .detail-hero{width:100%;aspect-ratio:3/4;background:var(--accent-soft);border-radius:10px;overflow:hidden;margin-bottom:8px;}
+  .detail-hero img{width:100%;height:100%;object-fit:contain;background:#fff;}
+  .detail-thumbs{display:flex;gap:6px;overflow-x:auto;margin-bottom:14px;}
+  .detail-thumbs img{width:56px;height:70px;object-fit:cover;border-radius:6px;border:2px solid transparent;}
+  .detail-thumbs img.sel{border-color:var(--accent);}
+  .detail-tags{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;}
+  .detail-notes{font-size:0.88rem;color:var(--ink-soft);white-space:pre-wrap;line-height:1.4;}
+
+  /* outfit board */
+  .board-canvas{
+    position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    width:100%;height:60vh;overflow:hidden;touch-action:none;
+  }
+  .board-item{
+    position:absolute;width:90px;border-radius:6px;overflow:hidden;border:2px solid #fff;
+    box-shadow:0 2px 6px rgba(0,0,0,0.18);touch-action:none;cursor:grab;
+  }
+  .board-item img{width:100%;display:block;}
+  .board-picker{display:flex;gap:8px;overflow-x:auto;padding:8px 0;}
+  .board-picker img{width:64px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--line);}
+
+  .stats-box{
+    background:var(--accent-soft);border-radius:8px;padding:10px 12px;font-size:0.8rem;color:var(--ink-soft);margin-bottom:14px;
+  }
+  .stats-box b{color:var(--ink);}
+
+  .helptext{font-size:0.8rem;color:var(--ink-soft);margin:6px 0 14px;line-height:1.4;}
+
+  textarea.bookmarklet-code{width:100%;height:90px;font-family:monospace;font-size:0.7rem;}
+
+  ::-webkit-scrollbar{height:6px;width:6px;}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>🧵 Wardrobe</h1>
+  <div class="topbar-spacer"></div>
+  <button class="icon-btn" id="btnOpen">Open file…</button>
+  <button class="icon-btn primary" id="btnSave">Save / Export</button>
+</header>
+
+<nav class="tabs">
+  <button data-tab="items" class="active">Items</button>
+  <button data-tab="outfits">Outfits</button>
+  <button data-tab="bookmarklet">Add from web</button>
+  <button data-tab="about">Info</button>
+</nav>
+
+<main>
+
+  <!-- ITEMS TAB -->
+  <section id="tab-items">
+    <div class="filterbar">
+      <input type="text" id="searchBox" placeholder="Search name or notes…">
+    </div>
+    <div id="tagFilterRow" class="filterbar"></div>
+    <div id="itemGrid" class="grid"></div>
+    <div id="itemsEmpty" class="empty-state" style="display:none;">
+      <div>No items yet.</div>
+      <button class="icon-btn primary" id="emptyAddBtn">+ Add your first item</button>
+    </div>
+  </section>
+
+  <!-- OUTFITS TAB -->
+  <section id="tab-outfits" style="display:none;">
+    <div class="filterbar">
+      <button class="icon-btn primary" id="newOutfitBtn">+ New outfit board</button>
+    </div>
+    <div id="outfitGrid" class="grid"></div>
+    <div id="outfitsEmpty" class="empty-state" style="display:none;">
+      No outfit boards yet. Create one to start arranging items together.
+    </div>
+  </section>
+
+  <!-- BOOKMARKLET TAB -->
+  <section id="tab-bookmarklet" style="display:none;">
+    <h2 style="margin-bottom:10px;">Sharing images in from the web</h2>
+    <p class="helptext">
+      <b>If this app is installed to your home screen</b> (see Info tab for install steps), you can use Android's
+      regular Share menu: on any webpage, tap an image (long-press to bring up image options, or use the page's
+      Share button), choose Share, and pick <b>Wardrobe</b> from the list. It'll open here ready to add as a new item.
+    </p>
+    <p class="helptext">
+      This relies on a browser feature that isn't available on every Android browser. If it doesn't show up as
+      a share option, use the bookmarklet fallback below instead — note that on some mobile browsers (notably
+      Chrome and Opera on Android) bookmarklets are blocked entirely and this fallback won't work either; in
+      that case, save images to your gallery and upload them normally.
+    </p>
+    <div style="margin:14px 0;">
+      <a href="#" id="bookmarkletLink" style="display:inline-block;padding:10px 16px;background:var(--accent);color:#fff;border-radius:8px;text-decoration:none;font-size:0.9rem;">📌 Grab Images (bookmarklet fallback)</a>
+    </div>
+    <p class="helptext">Or copy this code manually as the bookmark's URL/address:</p>
+    <textarea class="bookmarklet-code" id="bookmarkletCode" readonly></textarea>
+  </section>
+
+  <!-- ABOUT TAB -->
+  <section id="tab-about" style="display:none;">
+    <h2 style="margin-bottom:10px;">Installing this app (for Android sharing)</h2>
+    <p class="helptext">
+      To use Android's Share menu to send images here, this page needs to be installed to your home screen
+      as an app (not just bookmarked). In Chrome: tap the ⋮ menu → <b>Add to Home screen</b> → <b>Install</b>.
+      Once installed, open it at least once from the home screen icon before trying to share into it.
+    </p>
+    <h2 style="margin:18px 0 10px;">This file</h2>
+    <div class="stats-box" id="statsBox"></div>
+    <p class="helptext">
+      This is a self-contained wardrobe catalog. All your items, tags, outfit boards, and images are stored
+      inside this single HTML file — nothing is sent anywhere. To back up or sync, use <b>Save / Export</b> to
+      download a fresh copy (named with a timestamp), and put it wherever you sync from (e.g. a OneDrive folder).
+      Use <b>Open file…</b> to load a previously saved copy.
+    </p>
+    <p class="helptext">
+      Because everything lives in the file itself, if two people edit separate copies and save separately, you'll
+      end up with two files that have diverged — there's no automatic merge yet. Compare the stats above between
+      copies if something seems off.
+    </p>
+  </section>
+
+</main>
+
+<button class="fab" id="fabAdd">+</button>
+
+<div id="modalRoot"></div>
+
+<script>
+/* ===================== DATA ===================== */
+let DATA = {
+  items: [],     // {id, name, tags:[], images:[base64...], notes, created, modified}
+  outfits: [],   // {id, name, created, modified, placements:[{itemId,x,y,w}]}
+};
+let pendingBookmarkletImages = null; // images queued from a bookmarklet handoff, awaiting confirmation
+
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function nowISO(){ return new Date().toISOString(); }
+
+function humanTimestamp(d){
+  d = d || new Date();
+  const pad = n => n.toString().padStart(2,'0');
+  const yyyy = d.getFullYear();
+  const mm = pad(d.getMonth()+1);
+  const dd = pad(d.getDate());
+  let h = d.getHours();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if(h===0) h=12;
+  const min = pad(d.getMinutes());
+  return `${yyyy}${mm}${dd}-${h}${min}${ampm}`;
+}
+
+function approxBytes(obj){
+  try{ return new Blob([JSON.stringify(obj)]).size; }catch(e){ return JSON.stringify(obj).length; }
+}
+function formatBytes(b){
+  if(b > 1024*1024) return (b/1024/1024).toFixed(2)+' MB';
+  if(b > 1024) return (b/1024).toFixed(1)+' KB';
+  return b+' B';
+}
+
+function allTags(){
+  const s = new Set();
+  DATA.items.forEach(i => (i.tags||[]).forEach(t => s.add(t)));
+  return Array.from(s).sort((a,b)=>a.localeCompare(b));
+}
+
+/* ===================== RENDER: ITEMS GRID ===================== */
+let activeTagFilters = new Set();
+let searchTerm = '';
+
+function renderTagFilterRow(){
+  const row = document.getElementById('tagFilterRow');
+  const tags = allTags();
+  row.innerHTML = '';
+  tags.forEach(t=>{
+    const chip = document.createElement('span');
+    chip.className = 'tagchip'+(activeTagFilters.has(t)?' active':'');
+    chip.textContent = t;
+    chip.onclick = ()=>{
+      if(activeTagFilters.has(t)) activeTagFilters.delete(t);
+      else activeTagFilters.add(t);
+      renderTagFilterRow();
+      renderItemGrid();
+    };
+    row.appendChild(chip);
+  });
+}
+
+function filteredItems(){
+  let list = DATA.items;
+  if(activeTagFilters.size){
+    list = list.filter(i => (i.tags||[]).some(t => activeTagFilters.has(t)));
+  }
+  if(searchTerm.trim()){
+    const q = searchTerm.trim().toLowerCase();
+    list = list.filter(i =>
+      (i.name||'').toLowerCase().includes(q) ||
+      (i.notes||'').toLowerCase().includes(q) ||
+      (i.tags||[]).some(t=>t.toLowerCase().includes(q))
+    );
+  }
+  return list;
+}
+
+function renderItemGrid(){
+  const grid = document.getElementById('itemGrid');
+  const empty = document.getElementById('itemsEmpty');
+  const list = filteredItems();
+  grid.innerHTML = '';
+  if(DATA.items.length === 0){
+    empty.style.display = 'block';
+    grid.style.display = 'none';
+  } else {
+    empty.style.display = 'none';
+    grid.style.display = 'grid';
+    list.forEach(item=>{
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.onclick = ()=> openItemDetail(item.id);
+      const thumb = document.createElement('div');
+      thumb.className = 'thumb';
+      if(item.images && item.images.length){
+        const img = document.createElement('img');
+        img.src = item.images[0];
+        thumb.appendChild(img);
+        if(item.images.length > 1){
+          const cnt = document.createElement('span');
+          cnt.className = 'count';
+          cnt.textContent = item.images.length + ' photos';
+          thumb.appendChild(cnt);
+        }
+      } else {
+        thumb.textContent = '🪡';
+        thumb.style.fontSize = '2rem';
+      }
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.innerHTML = `<div class="name">${escapeHtml(item.name||'Untitled')}</div>
+        <div class="tags">${(item.tags||[]).join(' · ')}</div>`;
+      card.appendChild(thumb);
+      card.appendChild(meta);
+      grid.appendChild(card);
+    });
+  }
+  renderTagFilterRow();
+}
+
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ===================== MODAL HELPERS ===================== */
+function closeModal(){ document.getElementById('modalRoot').innerHTML = ''; }
+function showModal(innerHtml, opts={}){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `<div class="overlay ${opts.center?'center':''}" id="modalOverlay"><div class="sheet">${innerHtml}</div></div>`;
+  document.getElementById('modalOverlay').addEventListener('mousedown', (e)=>{
+    if(e.target.id === 'modalOverlay') closeModal();
+  });
+}
+
+/* ===================== ADD / EDIT ITEM ===================== */
+function openItemEditor(itemId){
+  const isNew = !itemId;
+  const item = isNew ? {id:uid(), name:'', tags:[], images:[], notes:'', created:nowISO(), modified:nowISO()} : DATA.items.find(i=>i.id===itemId);
+  const workingTags = new Set(item.tags||[]);
+  const workingImages = (item.images||[]).slice();
+
+  showModal(`
+    <button class="sheet-close" onclick="closeModal()">×</button>
+    <h2>${isNew?'Add item':'Edit item'}</h2>
+    <label class="field">
+      <span class="label-text">Name</span>
+      <input type="text" id="f_name" value="${escapeHtml(item.name)}" placeholder="e.g. Rehearsal leotard, navy">
+    </label>
+    <label class="field">
+      <span class="label-text">Photos (front/back/detail — add as many as you like)</span>
+      <div class="imgrow" id="f_imgrow"></div>
+      <input type="file" id="f_fileInput" accept="image/*" multiple style="display:none;">
+    </label>
+    <label class="field">
+      <span class="label-text">Tags</span>
+      <div class="tageditor" id="f_tagrow"></div>
+      <input type="text" id="f_tagInput" placeholder="Type a tag and press enter">
+    </label>
+    <label class="field">
+      <span class="label-text">Notes</span>
+      <textarea id="f_notes" placeholder="Material, size, where it's from, anything else...">${escapeHtml(item.notes||'')}</textarea>
+    </label>
+    <div class="btnrow">
+      ${isNew?'':'<button class="danger" id="f_delete">Delete</button>'}
+      <button class="primary" id="f_save">Save item</button>
+    </div>
+  `, {center:true});
+
+  function renderImgRow(){
+    const row = document.getElementById('f_imgrow');
+    row.innerHTML = '';
+    workingImages.forEach((src, idx)=>{
+      const wrap = document.createElement('div');
+      wrap.className = 'imgwrap';
+      wrap.innerHTML = `<img src="${src}"><button class="rm" data-idx="${idx}">×</button>`;
+      row.appendChild(wrap);
+    });
+    const addBtn = document.createElement('button');
+    addBtn.className = 'addbtn';
+    addBtn.textContent = '+ Add photo';
+    addBtn.onclick = ()=> document.getElementById('f_fileInput').click();
+    row.appendChild(addBtn);
+    row.querySelectorAll('.rm').forEach(btn=>{
+      btn.onclick = (e)=>{
+        e.stopPropagation();
+        workingImages.splice(parseInt(btn.dataset.idx),1);
+        renderImgRow();
+      };
+    });
+  }
+
+  function renderTagRow(){
+    const row = document.getElementById('f_tagrow');
+    row.innerHTML = '';
+    Array.from(workingTags).sort().forEach(t=>{
+      const chip = document.createElement('span');
+      chip.className = 'tagchip';
+      chip.innerHTML = `${escapeHtml(t)} <span class="x">×</span>`;
+      chip.onclick = ()=>{ workingTags.delete(t); renderTagRow(); };
+      row.appendChild(chip);
+    });
+  }
+
+  renderImgRow();
+  renderTagRow();
+
+  document.getElementById('f_fileInput').addEventListener('change', async (e)=>{
+    const files = Array.from(e.target.files||[]);
+    for(const file of files){
+      const b64 = await fileToCompressedDataUrl(file);
+      workingImages.push(b64);
+    }
+    renderImgRow();
+    e.target.value = '';
+  });
+
+  document.getElementById('f_tagInput').addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      const v = e.target.value.trim();
+      if(v){ workingTags.add(v); renderTagRow(); e.target.value=''; }
+    }
+  });
+
+  // if this item was opened with pending bookmarklet images (remote URLs), fetch and append them
+  if(isNew && pendingBookmarkletImages && pendingBookmarkletImages.length){
+    (async ()=>{
+      for(const url of pendingBookmarkletImages){
+        try{
+          const b64 = await urlToDataUrl(url);
+          workingImages.push(b64);
+        }catch(err){ console.warn('could not fetch image', url, err); }
+      }
+      pendingBookmarkletImages = null;
+      renderImgRow();
+    })();
+  }
+
+  // if this item was opened via an Android share-target handoff, the images
+  // arrive already as data URLs through this one-time event rather than needing a fetch
+  if(isNew){
+    const shareListener = (e)=>{
+      (e.detail||[]).forEach(dataUrl => workingImages.push(dataUrl));
+      renderImgRow();
+      window.removeEventListener('wardrobe-share-images', shareListener);
+    };
+    window.addEventListener('wardrobe-share-images', shareListener);
+  }
+
+  if(!isNew){
+    document.getElementById('f_delete').onclick = ()=>{
+      if(confirm('Delete this item? This cannot be undone (until you re-import an older save).')){
+        DATA.items = DATA.items.filter(i=>i.id!==item.id);
+        closeModal();
+        renderItemGrid();
+      }
+    };
+  }
+
+  document.getElementById('f_save').onclick = ()=>{
+    item.name = document.getElementById('f_name').value.trim() || 'Untitled';
+    item.notes = document.getElementById('f_notes').value;
+    item.tags = Array.from(workingTags);
+    item.images = workingImages.slice();
+    item.modified = nowISO();
+    if(isNew) DATA.items.push(item);
+    closeModal();
+    renderItemGrid();
+  };
+}
+
+function fileToCompressedDataUrl(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const maxDim = 1000;
+        let {width,height} = img;
+        if(width > maxDim || height > maxDim){
+          if(width > height){ height = Math.round(height * maxDim/width); width = maxDim; }
+          else { width = Math.round(width * maxDim/height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img,0,0,width,height);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function urlToDataUrl(url){
+  return new Promise((resolve,reject)=>{
+    fetch(url, {mode:'cors'}).then(r=>{
+      if(!r.ok) throw new Error('fetch failed');
+      return r.blob();
+    }).then(blob=>{
+      const img = new Image();
+      const objUrl = URL.createObjectURL(blob);
+      img.onload = ()=>{
+        const maxDim = 1000;
+        let {width,height} = img;
+        if(width > maxDim || height > maxDim){
+          if(width > height){ height = Math.round(height * maxDim/width); width = maxDim; }
+          else { width = Math.round(width * maxDim/height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img,0,0,width,height);
+        URL.revokeObjectURL(objUrl);
+        resolve(canvas.toDataURL('image/jpeg',0.82));
+      };
+      img.onerror = reject;
+      img.src = objUrl;
+    }).catch(reject);
+  });
+}
+
+/* ===================== ITEM DETAIL VIEW ===================== */
+function openItemDetail(itemId){
+  const item = DATA.items.find(i=>i.id===itemId);
+  if(!item) return;
+  let selectedIdx = 0;
+
+  showModal(`
+    <button class="sheet-close" onclick="closeModal()">×</button>
+    <h2>${escapeHtml(item.name)}</h2>
+    <div class="detail-hero" id="d_hero"></div>
+    <div class="detail-thumbs" id="d_thumbs"></div>
+    <div class="detail-tags" id="d_tags"></div>
+    <div class="detail-notes">${escapeHtml(item.notes||'')||'<em>No notes.</em>'}</div>
+    <div class="btnrow">
+      <button id="d_edit">Edit</button>
+    </div>
+  `, {center:true});
+
+  function renderHero(){
+    document.getElementById('d_hero').innerHTML = item.images[selectedIdx] ?
+      `<img src="${item.images[selectedIdx]}">` : '';
+  }
+  function renderThumbs(){
+    const t = document.getElementById('d_thumbs');
+    t.innerHTML='';
+    item.images.forEach((src,idx)=>{
+      const im = document.createElement('img');
+      im.src = src;
+      im.className = idx===selectedIdx?'sel':'';
+      im.onclick = ()=>{ selectedIdx = idx; renderHero(); renderThumbs(); };
+      t.appendChild(im);
+    });
+  }
+  document.getElementById('d_tags').innerHTML = (item.tags||[]).map(t=>`<span class="tagchip">${escapeHtml(t)}</span>`).join('');
+  renderHero();
+  renderThumbs();
+  document.getElementById('d_edit').onclick = ()=> openItemEditor(itemId);
+}
+
+/* ===================== OUTFITS ===================== */
+function renderOutfitGrid(){
+  const grid = document.getElementById('outfitGrid');
+  const empty = document.getElementById('outfitsEmpty');
+  grid.innerHTML = '';
+  if(DATA.outfits.length === 0){
+    empty.style.display='block'; grid.style.display='none'; return;
+  }
+  empty.style.display='none'; grid.style.display='grid';
+  DATA.outfits.forEach(outfit=>{
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.onclick = ()=> openOutfitBoard(outfit.id);
+    const thumb = document.createElement('div');
+    thumb.className = 'thumb';
+    thumb.style.fontSize = '2rem';
+    const firstItem = (outfit.placements||[]).map(p=>DATA.items.find(i=>i.id===p.itemId)).find(i=>i&&i.images&&i.images.length);
+    if(firstItem){
+      thumb.innerHTML = `<img src="${firstItem.images[0]}">`;
+    } else {
+      thumb.textContent = '👗';
+    }
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.innerHTML = `<div class="name">${escapeHtml(outfit.name||'Untitled outfit')}</div>
+      <div class="tags">${(outfit.placements||[]).length} item(s)</div>`;
+    card.appendChild(thumb); card.appendChild(meta);
+    grid.appendChild(card);
+  });
+}
+
+function openOutfitBoard(outfitId){
+  const isNew = !outfitId;
+  const outfit = isNew ? {id:uid(), name:'', placements:[], created:nowISO(), modified:nowISO()} : DATA.outfits.find(o=>o.id===outfitId);
+
+  showModal(`
+    <button class="sheet-close" onclick="closeModal()">×</button>
+    <h2>${isNew?'New outfit board':'Edit outfit board'}</h2>
+    <label class="field">
+      <span class="label-text">Name</span>
+      <input type="text" id="o_name" value="${escapeHtml(outfit.name)}" placeholder="e.g. Final performance look">
+    </label>
+    <div class="helptext">Tap an item below to drop it onto the board. Drag items on the board to arrange them.</div>
+    <div class="board-picker" id="o_picker"></div>
+    <div class="board-canvas" id="o_canvas"></div>
+    <div class="btnrow">
+      ${isNew?'':'<button class="danger" id="o_delete">Delete board</button>'}
+      <button class="primary" id="o_save">Save board</button>
+    </div>
+  `, {center:true});
+
+  const picker = document.getElementById('o_picker');
+  DATA.items.forEach(item=>{
+    if(!item.images || !item.images.length) return;
+    const im = document.createElement('img');
+    im.src = item.images[0];
+    im.title = item.name;
+    im.onclick = ()=>{
+      outfit.placements.push({itemId:item.id, x:20+Math.random()*40, y:20+Math.random()*40, w:90});
+      renderCanvas();
+    };
+    picker.appendChild(im);
+  });
+
+  const canvas = document.getElementById('o_canvas');
+  function renderCanvas(){
+    canvas.innerHTML = '';
+    outfit.placements.forEach((p, idx)=>{
+      const item = DATA.items.find(i=>i.id===p.itemId);
+      if(!item || !item.images || !item.images.length) return;
+      const el = document.createElement('div');
+      el.className = 'board-item';
+      el.style.left = p.x+'px';
+      el.style.top = p.y+'px';
+      el.style.width = (p.w||90)+'px';
+      el.innerHTML = `<img src="${item.images[0]}">`;
+      makeDraggable(el, p, canvas, renderCanvas);
+      el.addEventListener('dblclick', ()=>{
+        outfit.placements.splice(idx,1);
+        renderCanvas();
+      });
+      canvas.appendChild(el);
+    });
+  }
+  renderCanvas();
+
+  if(!isNew){
+    document.getElementById('o_delete').onclick = ()=>{
+      if(confirm('Delete this outfit board?')){
+        DATA.outfits = DATA.outfits.filter(o=>o.id!==outfit.id);
+        closeModal();
+        renderOutfitGrid();
+      }
+    };
+  }
+
+  document.getElementById('o_save').onclick = ()=>{
+    outfit.name = document.getElementById('o_name').value.trim() || 'Untitled outfit';
+    outfit.modified = nowISO();
+    if(isNew) DATA.outfits.push(outfit);
+    closeModal();
+    renderOutfitGrid();
+  };
+}
+
+function makeDraggable(el, posObj, container, onMove){
+  let startX,startY,origX,origY,dragging=false;
+  function getPoint(e){
+    if(e.touches && e.touches.length) return {x:e.touches[0].clientX,y:e.touches[0].clientY};
+    return {x:e.clientX, y:e.clientY};
+  }
+  function down(e){
+    dragging = true;
+    const p = getPoint(e);
+    startX = p.x; startY = p.y;
+    origX = posObj.x; origY = posObj.y;
+    e.preventDefault();
+  }
+  function move(e){
+    if(!dragging) return;
+    const p = getPoint(e);
+    posObj.x = origX + (p.x - startX);
+    posObj.y = origY + (p.y - startY);
+    el.style.left = posObj.x+'px';
+    el.style.top = posObj.y+'px';
+    e.preventDefault();
+  }
+  function up(){ dragging=false; }
+  el.addEventListener('mousedown', down);
+  el.addEventListener('touchstart', down, {passive:false});
+  window.addEventListener('mousemove', move);
+  window.addEventListener('touchmove', move, {passive:false});
+  window.addEventListener('mouseup', up);
+  window.addEventListener('touchend', up);
+}
+
+/* ===================== SAVE / EXPORT ===================== */
+function computeStats(){
+  const itemCount = DATA.items.length;
+  const imageCount = DATA.items.reduce((sum,i)=>sum+(i.images?i.images.length:0),0);
+  const outfitCount = DATA.outfits.length;
+  const tagCount = allTags().length;
+  const bytes = approxBytes(DATA);
+  return {itemCount, imageCount, outfitCount, tagCount, bytes};
+}
+
+function buildExportObject(){
+  const stats = computeStats();
+  const meta = {
+    _meta: {
+      app: 'Wardrobe single-file catalog',
+      exportedAt: nowISO(),
+      exportedAtHuman: humanTimestamp(new Date()),
+      itemCount: stats.itemCount,
+      imageCount: stats.imageCount,
+      outfitCount: stats.outfitCount,
+      tagCount: stats.tagCount,
+      approxFileSizeBytes: stats.bytes,
+      approxFileSizeHuman: formatBytes(stats.bytes),
+    }
+  };
+  return Object.assign({}, meta, DATA);
+}
+
+function doSave(){
+  const exportObj = buildExportObject();
+  const json = JSON.stringify(exportObj, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = humanTimestamp(new Date());
+  a.href = url;
+  a.download = `wardrobe_${ts}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
+function doOpen(){
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json';
+  input.onchange = (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const obj = JSON.parse(reader.result);
+        if(!obj.items){ alert('This file does not look like a wardrobe export.'); return; }
+        DATA.items = obj.items || [];
+        DATA.outfits = obj.outfits || [];
+        renderItemGrid();
+        renderOutfitGrid();
+        renderAboutStats();
+        alert('Loaded: '+(obj._meta? obj._meta.exportedAtHuman : 'unknown date'));
+      }catch(err){
+        alert('Could not read that file: '+err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+function renderAboutStats(){
+  const s = computeStats();
+  document.getElementById('statsBox').innerHTML = `
+    <div><b>${s.itemCount}</b> items &nbsp;·&nbsp; <b>${s.imageCount}</b> photos &nbsp;·&nbsp; <b>${s.outfitCount}</b> outfit boards &nbsp;·&nbsp; <b>${s.tagCount}</b> tags</div>
+    <div style="margin-top:4px;">Approx. size in memory: <b>${formatBytes(s.bytes)}</b></div>
+    <div style="margin-top:4px;color:var(--ink-soft);font-size:0.75rem;">This same stats block is written into the top of every exported file as <code>_meta</code>, so you can compare two saved copies without opening the full data.</div>
+  `;
+}
+
+/* ===================== BOOKMARKLET ===================== */
+function buildBookmarkletCode(){
+  // self-contained overlay injected on any page; lets user pick images, then posts URLs to this app via a new tab + URL param (base64 JSON in hash)
+  const code = `
+javascript:(function(){
+  if(window.__wardrobeGrabberOpen) return;
+  window.__wardrobeGrabberOpen = true;
+  var imgs = Array.from(document.images).filter(function(im){
+    return im.naturalWidth >= 150 && im.naturalHeight >= 150;
+  });
+  var overlay = document.createElement('div');
+  overlay.style.position='fixed';overlay.style.inset='0';overlay.style.background='rgba(20,16,12,0.85)';
+  overlay.style.zIndex='2147483647';overlay.style.overflow='auto';overlay.style.padding='16px';
+  overlay.style.fontFamily='sans-serif';
+  var html = '<div style="color:#fff;font-size:16px;margin-bottom:10px;">Select images to send to Wardrobe</div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">';
+  imgs.forEach(function(im,idx){
+    var big = (im.naturalWidth>=400 && im.naturalHeight>=400);
+    html += '<label style="position:relative;display:inline-block;cursor:pointer;">'+
+      '<img src="'+im.src+'" style="width:90px;height:110px;object-fit:cover;border-radius:6px;border:3px solid '+(big?'#8a5a44':'transparent')+';">'+
+      '<input type="checkbox" data-idx="'+idx+'" '+(big?'checked':'')+' style="position:absolute;top:4px;left:4px;width:18px;height:18px;">'+
+      '</label>';
+  });
+  html += '</div>';
+  html += '<button id="__wgSend" style="padding:10px 18px;background:#8a5a44;color:#fff;border:none;border-radius:8px;font-size:14px;margin-right:8px;">Send selected to Wardrobe</button>';
+  html += '<button id="__wgCancel" style="padding:10px 18px;background:#444;color:#fff;border:none;border-radius:8px;font-size:14px;">Cancel</button>';
+  overlay.innerHTML = html;
+  document.body.appendChild(overlay);
+  document.getElementById('__wgCancel').onclick = function(){ overlay.remove(); window.__wardrobeGrabberOpen=false; };
+  document.getElementById('__wgSend').onclick = function(){
+    var checked = Array.from(overlay.querySelectorAll('input[type=checkbox]:checked'));
+    var urls = checked.map(function(cb){ return imgs[parseInt(cb.dataset.idx)].src; });
+    overlay.remove();
+    window.__wardrobeGrabberOpen = false;
+    if(!urls.length) return;
+    var payload = encodeURIComponent(JSON.stringify(urls));
+    var w = window.open('', '_blank');
+    w.document.write('<p style="font-family:sans-serif;padding:20px;">Open your Wardrobe app tab and paste this there if it does not auto-import. Otherwise you can close this tab.</p><textarea style="width:90%;height:200px;">'+decodeURIComponent(payload)+'</textarea>');
+  };
+})();`.trim().replace(/\s+/g,' ');
+  return code;
+}
+
+function setupBookmarklet(){
+  const code = buildBookmarkletCode();
+  document.getElementById('bookmarkletLink').setAttribute('href', code);
+  document.getElementById('bookmarkletCode').value = code;
+}
+
+/* ===================== TABS ===================== */
+function showTab(name){
+  ['items','outfits','bookmarklet','about'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display = (t===name?'':'none');
+  });
+  document.querySelectorAll('nav.tabs button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.tab===name);
+  });
+  if(name==='about') renderAboutStats();
+}
+
+/* ===================== WIRE UP ===================== */
+document.querySelectorAll('nav.tabs button').forEach(b=>{
+  b.onclick = ()=> showTab(b.dataset.tab);
+});
+document.getElementById('fabAdd').onclick = ()=>{
+  const activeTab = document.querySelector('nav.tabs button.active').dataset.tab;
+  if(activeTab === 'outfits') openOutfitBoard(null);
+  else openItemEditor(null);
+};
+document.getElementById('emptyAddBtn').onclick = ()=> openItemEditor(null);
+document.getElementById('newOutfitBtn').onclick = ()=> openOutfitBoard(null);
+document.getElementById('btnSave').onclick = doSave;
+document.getElementById('btnOpen').onclick = doOpen;
+document.getElementById('searchBox').addEventListener('input', (e)=>{
+  searchTerm = e.target.value;
+  renderItemGrid();
+});
+
+setupBookmarklet();
+renderItemGrid();
+renderOutfitGrid();
+
+/* register service worker (required for installability + share target interception) */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('SW registration failed', err));
+}
+
+/* check for bookmarklet handoff via URL hash (legacy fallback path) */
+(function checkHashHandoff(){
+  if(location.hash && location.hash.startsWith('#wardrobe-import=')){
+    try{
+      const urls = JSON.parse(decodeURIComponent(location.hash.replace('#wardrobe-import=','')));
+      if(Array.isArray(urls) && urls.length){
+        pendingBookmarkletImages = urls;
+        openItemEditor(null);
+      }
+    }catch(e){ console.warn('bad handoff hash', e); }
+  }
+})();
+
+/* check for Android share-target handoff via IndexedDB (set by share-handler.html) */
+async function checkShareHandoff(){
+  const params = new URLSearchParams(location.search);
+  if(params.get('from') !== 'share') return;
+
+  try{
+    const db = await new Promise((resolve,reject)=>{
+      const req = indexedDB.open('wardrobe-share-handoff', 1);
+      req.onupgradeneeded = ()=> req.result.createObjectStore('pending');
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> reject(req.error);
+    });
+    const payload = await new Promise((resolve,reject)=>{
+      const tx = db.transaction('pending','readonly');
+      const req = tx.objectStore('pending').get('latest');
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> reject(req.error);
+    });
+    if(!payload) return;
+
+    // clear it so re-visiting doesn't re-import
+    const clearTx = db.transaction('pending','readwrite');
+    clearTx.objectStore('pending').delete('latest');
+
+    if(payload.images && payload.images.length){
+      pendingBookmarkletImages = null; // these are already data URLs, not remote URLs
+      openItemEditor(null);
+      // wait for editor to render, then inject the already-fetched data URLs directly
+      setTimeout(()=>{
+        const row = document.getElementById('f_imgrow');
+        if(!row) return;
+        // simulate the workingImages push by triggering the same path urlToDataUrl would,
+        // but these are already data URLs so just append directly via a custom event
+        window.dispatchEvent(new CustomEvent('wardrobe-share-images', {detail: payload.images}));
+      }, 100);
+    } else if(payload.url){
+      // shared a link with no image file (e.g. shared the page itself) — prefill notes with the URL
+      openItemEditor(null);
+      setTimeout(()=>{
+        const notesEl = document.getElementById('f_notes');
+        if(notesEl) notesEl.value = (payload.title?payload.title+'\n':'') + payload.url;
+      }, 100);
+    }
+  }catch(err){
+    console.warn('share handoff read failed', err);
+  }
+}
+checkShareHandoff();
+</script>
+</body>
+</html>
