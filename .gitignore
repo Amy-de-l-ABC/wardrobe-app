@@ -1,0 +1,14 @@
+# OS clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local save exports (wardrobe data — keep out of version control)
+wardrobe_*.json
+
