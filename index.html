@@ -427,7 +427,10 @@ function openItemEditor(itemId){
     <label class="field">
       <span class="label-text">Tags</span>
       <div class="tageditor" id="f_tagrow"></div>
-      <input type="text" id="f_tagInput" placeholder="Type a tag and press enter">
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="f_tagInput" placeholder="Type a tag…" style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:0.95rem;background:var(--bg);">
+        <button type="button" id="f_tagAdd" style="padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:var(--accent-soft);font-size:0.9rem;flex:0 0 auto;">Add</button>
+      </div>
     </label>
     <label class="field">
       <span class="label-text">Notes</span>
@@ -487,12 +490,23 @@ function openItemEditor(itemId){
     e.target.value = '';
   });
 
-  document.getElementById('f_tagInput').addEventListener('keydown', (e)=>{
-    if(e.key === 'Enter'){
-      e.preventDefault();
-      const v = e.target.value.trim();
-      if(v){ workingTags.add(v); renderTagRow(); e.target.value=''; }
-    }
+  function commitTag(){
+    const input = document.getElementById('f_tagInput');
+    const v = input.value.trim();
+    if(v){ workingTags.add(v); renderTagRow(); input.value=''; }
+    input.focus();
+  }
+  const tagInput = document.getElementById('f_tagInput');
+  // keydown: preventDefault stops focus jump on desktop
+  tagInput.addEventListener('keydown', (e)=>{
+    if(e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); commitTag(); }
+  });
+  // keyup: catches Android soft keyboard Enter which may not fire keydown
+  tagInput.addEventListener('keyup', (e)=>{
+    if(e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); commitTag(); }
+  });
+  document.getElementById('f_tagAdd').addEventListener('click', (e)=>{
+    e.preventDefault(); e.stopPropagation(); commitTag();
   });
 
   // if this item was opened with pending bookmarklet images (remote URLs), fetch and append them
@@ -951,47 +965,77 @@ if('serviceWorker' in navigator){
 })();
 
 /* check for Android share-target handoff via IndexedDB (set by share-handler.html) */
+/* ---- IndexedDB helpers for share queue ---- */
+const SHARE_DB = 'wardrobe-share-handoff';
+const SHARE_STORE = 'queue';
+
+function openShareDb(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(SHARE_DB, 2);
+    req.onupgradeneeded = (e)=>{
+      const db = e.target.result;
+      // v1 used store name 'pending'; v2 uses 'queue'
+      if(db.objectStoreNames.contains('pending')) db.deleteObjectStore('pending');
+      if(!db.objectStoreNames.contains(SHARE_STORE)) db.createObjectStore(SHARE_STORE, {autoIncrement:true});
+    };
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+
+async function drainShareQueue(){
+  // Returns all queued payloads and clears the queue atomically
+  const db = await openShareDb();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(SHARE_STORE,'readwrite');
+    const store = tx.objectStore(SHARE_STORE);
+    const results = [];
+    const curReq = store.openCursor();
+    curReq.onsuccess = (e)=>{
+      const cursor = e.target.result;
+      if(cursor){ results.push(cursor.value); cursor.delete(); cursor.continue(); }
+    };
+    tx.oncomplete = ()=> resolve(results);
+    tx.onerror = ()=> reject(tx.error);
+  });
+}
+
 async function checkShareHandoff(){
   const params = new URLSearchParams(location.search);
   if(params.get('from') !== 'share') return;
 
+  // Strip the ?from=share so refreshing doesn't re-trigger
+  history.replaceState(null,'',location.pathname);
+
   try{
-    const db = await new Promise((resolve,reject)=>{
-      const req = indexedDB.open('wardrobe-share-handoff', 1);
-      req.onupgradeneeded = ()=> req.result.createObjectStore('pending');
-      req.onsuccess = ()=> resolve(req.result);
-      req.onerror = ()=> reject(req.error);
-    });
-    const payload = await new Promise((resolve,reject)=>{
-      const tx = db.transaction('pending','readonly');
-      const req = tx.objectStore('pending').get('latest');
-      req.onsuccess = ()=> resolve(req.result);
-      req.onerror = ()=> reject(req.error);
-    });
-    if(!payload) return;
+    // Poll briefly — the service worker may still be writing to IDB when we load
+    let payloads = [];
+    for(let i=0; i<8; i++){
+      payloads = await drainShareQueue();
+      if(payloads.length) break;
+      await new Promise(r=>setTimeout(r,250));
+    }
+    if(!payloads.length) return;
 
-    // clear it so re-visiting doesn't re-import
-    const clearTx = db.transaction('pending','readwrite');
-    clearTx.objectStore('pending').delete('latest');
+    // Merge all queued payloads: accumulate images, take first URL/title found
+    const allImages = payloads.flatMap(p => p.images||[]);
+    const firstUrl = (payloads.find(p=>p.url)||{}).url || '';
+    const firstTitle = (payloads.find(p=>p.title)||{}).title || '';
 
-    if(payload.images && payload.images.length){
-      pendingBookmarkletImages = null; // these are already data URLs, not remote URLs
+    if(allImages.length){
       openItemEditor(null);
-      // wait for editor to render, then inject the already-fetched data URLs directly
       setTimeout(()=>{
-        const row = document.getElementById('f_imgrow');
-        if(!row) return;
-        // simulate the workingImages push by triggering the same path urlToDataUrl would,
-        // but these are already data URLs so just append directly via a custom event
-        window.dispatchEvent(new CustomEvent('wardrobe-share-images', {detail: payload.images}));
-      }, 100);
-    } else if(payload.url){
-      // shared a link with no image file (e.g. shared the page itself) — prefill notes with the URL
+        window.dispatchEvent(new CustomEvent('wardrobe-share-images', {detail: allImages}));
+      }, 150);
+    } else if(firstUrl){
+      // Shared a webpage link with no image — open editor with URL pre-filled in notes
       openItemEditor(null);
       setTimeout(()=>{
         const notesEl = document.getElementById('f_notes');
-        if(notesEl) notesEl.value = (payload.title?payload.title+'\n':'') + payload.url;
-      }, 100);
+        const nameEl = document.getElementById('f_name');
+        if(nameEl && firstTitle) nameEl.value = firstTitle;
+        if(notesEl) notesEl.value = firstUrl;
+      }, 150);
     }
   }catch(err){
     console.warn('share handoff read failed', err);
