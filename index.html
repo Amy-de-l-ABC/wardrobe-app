@@ -741,11 +741,14 @@ function renderInbox(){
     const card = document.createElement('div');
     card.className = 'inbox-card';
 
-    // thumb (first image)
+    // thumb (first image, or URL placeholder)
     const thumbDiv = document.createElement('div');
     thumbDiv.className = 'inbox-thumb';
     if(entry.images && entry.images.length){
       thumbDiv.innerHTML = `<img src="${entry.images[0]}">`;
+    } else {
+      thumbDiv.style.cssText = 'display:flex;align-items:center;justify-content:center;padding:6px;text-align:center;font-size:0.7rem;color:var(--ink-soft);word-break:break-all;';
+      thumbDiv.textContent = entry.sourceUrl ? '🔗 Link' : '📷 No image';
     }
 
     // fields
@@ -1202,7 +1205,10 @@ async function checkShareHandoff(){
 
     // Merge all queued payloads: accumulate images, take first URL/title found
     const allImages = payloads.flatMap(p => p.images||[]);
-    const firstUrl = (payloads.find(p=>p.url)||{}).url || '';
+    // Chrome often puts the page URL in 'text' rather than 'url'
+    const firstUrl = (payloads.find(p=>p.url)||{}).url
+      || (payloads.find(p=>p.text && p.text.startsWith('http'))||{}).text
+      || '';
     const firstTitle = (payloads.find(p=>p.title)||{}).title || '';
 
     if(allImages.length){
