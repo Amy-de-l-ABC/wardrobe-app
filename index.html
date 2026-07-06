@@ -175,6 +175,24 @@
 
   textarea.bookmarklet-code{width:100%;height:90px;font-family:monospace;font-size:0.7rem;}
 
+  /* inbox */
+  .inbox-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:12px;margin-bottom:12px;display:flex;gap:12px;align-items:flex-start;
+  }
+  .inbox-card .inbox-thumb{
+    flex:0 0 80px;height:100px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--accent-soft);
+  }
+  .inbox-card .inbox-thumb img{width:100%;height:100%;object-fit:cover;}
+  .inbox-card .inbox-fields{flex:1 1 auto;display:flex;flex-direction:column;gap:8px;}
+  .inbox-card .inbox-fields input{
+    width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:0.9rem;background:var(--bg);
+  }
+  .inbox-card .inbox-actions{display:flex;gap:8px;margin-top:4px;}
+  .inbox-card .inbox-actions button{flex:1;padding:8px;border-radius:8px;font-size:0.82rem;border:1px solid var(--line);background:var(--bg);}
+  .inbox-card .inbox-actions button.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .inbox-card .inbox-actions button.danger{color:var(--danger);border-color:var(--danger);}
+
   ::-webkit-scrollbar{height:6px;width:6px;}
   ::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px;}
 </style>
@@ -190,6 +208,7 @@
 
 <nav class="tabs">
   <button data-tab="items" class="active">Items</button>
+  <button data-tab="inbox">Inbox <span id="inboxBadge" style="display:none;background:var(--accent);color:#fff;border-radius:999px;padding:1px 7px;font-size:0.7rem;margin-left:3px;"></span></button>
   <button data-tab="outfits">Outfits</button>
   <button data-tab="bookmarklet">Add from web</button>
   <button data-tab="about">Info</button>
@@ -208,6 +227,13 @@
       <div>No items yet.</div>
       <button class="icon-btn primary" id="emptyAddBtn">+ Add your first item</button>
     </div>
+  </section>
+
+  <!-- INBOX TAB -->
+  <section id="tab-inbox" style="display:none;">
+    <p class="helptext" style="margin-bottom:10px;">Images shared into the app land here. Review, name, and tag each one before saving it to your catalog — or discard it if you changed your mind.</p>
+    <div id="inboxList"></div>
+    <div id="inboxEmpty" class="empty-state">Nothing in the inbox. Share images from your browser to add them here.</div>
   </section>
 
   <!-- OUTFITS TAB -->
@@ -276,8 +302,52 @@
 let DATA = {
   items: [],     // {id, name, tags:[], images:[base64...], notes, created, modified}
   outfits: [],   // {id, name, created, modified, placements:[{itemId,x,y,w}]}
+  inbox: [],     // {id, images:[base64...], sourceUrl, receivedAt} — staging area for shared images
 };
-let pendingBookmarkletImages = null; // images queued from a bookmarklet handoff, awaiting confirmation
+let pendingBookmarkletImages = null;
+
+/* ===================== AUTO-SAVE / AUTO-LOAD (IndexedDB) ===================== */
+const AUTOSAVE_DB = 'wardrobe-autosave';
+const AUTOSAVE_STORE = 'data';
+
+function openAutosaveDb(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(AUTOSAVE_DB, 1);
+    req.onupgradeneeded = ()=> req.result.createObjectStore(AUTOSAVE_STORE);
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+
+async function autosave(){
+  try{
+    const db = await openAutosaveDb();
+    await new Promise((resolve,reject)=>{
+      const tx = db.transaction(AUTOSAVE_STORE,'readwrite');
+      tx.objectStore(AUTOSAVE_STORE).put(JSON.stringify(DATA), 'current');
+      tx.oncomplete = resolve;
+      tx.onerror = reject;
+    });
+  }catch(e){ console.warn('autosave failed', e); }
+}
+
+async function autoload(){
+  try{
+    const db = await openAutosaveDb();
+    const raw = await new Promise((resolve,reject)=>{
+      const tx = db.transaction(AUTOSAVE_STORE,'readonly');
+      const req = tx.objectStore(AUTOSAVE_STORE).get('current');
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = reject;
+    });
+    if(raw){
+      const saved = JSON.parse(raw);
+      DATA.items = saved.items || [];
+      DATA.outfits = saved.outfits || [];
+      DATA.inbox = saved.inbox || [];
+    }
+  }catch(e){ console.warn('autoload failed', e); }
+}
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function nowISO(){ return new Date().toISOString(); }
@@ -538,6 +608,7 @@ function openItemEditor(itemId){
     document.getElementById('f_delete').onclick = ()=>{
       if(confirm('Delete this item? This cannot be undone (until you re-import an older save).')){
         DATA.items = DATA.items.filter(i=>i.id!==item.id);
+        autosave();
         closeModal();
         renderItemGrid();
       }
@@ -551,6 +622,7 @@ function openItemEditor(itemId){
     item.images = workingImages.slice();
     item.modified = nowISO();
     if(isNew) DATA.items.push(item);
+    autosave();
     closeModal();
     renderItemGrid();
   };
@@ -649,6 +721,101 @@ function openItemDetail(itemId){
   document.getElementById('d_edit').onclick = ()=> openItemEditor(itemId);
 }
 
+/* ===================== INBOX ===================== */
+function updateInboxBadge(){
+  const badge = document.getElementById('inboxBadge');
+  const count = DATA.inbox.length;
+  if(count > 0){ badge.textContent = count; badge.style.display='inline'; }
+  else { badge.style.display='none'; }
+}
+
+function renderInbox(){
+  const list = document.getElementById('inboxList');
+  const empty = document.getElementById('inboxEmpty');
+  updateInboxBadge();
+  if(!DATA.inbox.length){ list.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  list.innerHTML='';
+
+  DATA.inbox.forEach((entry, idx)=>{
+    const card = document.createElement('div');
+    card.className = 'inbox-card';
+
+    // thumb (first image)
+    const thumbDiv = document.createElement('div');
+    thumbDiv.className = 'inbox-thumb';
+    if(entry.images && entry.images.length){
+      thumbDiv.innerHTML = `<img src="${entry.images[0]}">`;
+    }
+
+    // fields
+    const fields = document.createElement('div');
+    fields.className = 'inbox-fields';
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.placeholder = 'Item name…';
+    nameInput.value = entry.name || '';
+
+    const imgCount = document.createElement('div');
+    imgCount.style.cssText = 'font-size:0.75rem;color:var(--ink-soft);';
+    imgCount.textContent = `${(entry.images||[]).length} photo${(entry.images||[]).length!==1?'s':''}` +
+      (entry.sourceUrl ? ` · from ${(() => { try{ return new URL(entry.sourceUrl).hostname; }catch(e){ return entry.sourceUrl.slice(0,30); }})()}` : '');
+
+    const actions = document.createElement('div');
+    actions.className = 'inbox-actions';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'primary';
+    saveBtn.textContent = 'Add to catalog';
+    saveBtn.onclick = ()=>{
+      const name = nameInput.value.trim() || 'Untitled';
+      const newItem = {
+        id: uid(), name, tags:[], images: entry.images||[], notes: entry.sourceUrl||'',
+        created: entry.receivedAt||nowISO(), modified: nowISO()
+      };
+      DATA.items.push(newItem);
+      DATA.inbox.splice(idx, 1);
+      autosave();
+      renderItemGrid();
+      renderInbox();
+    };
+
+    const editBtn = document.createElement('button');
+    editBtn.textContent = 'Full edit…';
+    editBtn.onclick = ()=>{
+      // promote to a real item first, then open editor
+      const name = nameInput.value.trim() || 'Untitled';
+      const newItem = {
+        id: uid(), name, tags:[], images: entry.images||[], notes: entry.sourceUrl||'',
+        created: entry.receivedAt||nowISO(), modified: nowISO()
+      };
+      DATA.items.push(newItem);
+      DATA.inbox.splice(idx, 1);
+      autosave();
+      renderItemGrid();
+      renderInbox();
+      openItemEditor(newItem.id);
+    };
+
+    const discardBtn = document.createElement('button');
+    discardBtn.className = 'danger';
+    discardBtn.textContent = 'Discard';
+    discardBtn.onclick = ()=>{
+      if(confirm('Discard this image? It will be removed from the inbox.')){
+        DATA.inbox.splice(idx, 1);
+        autosave();
+        renderInbox();
+      }
+    };
+
+    actions.append(saveBtn, editBtn, discardBtn);
+    fields.append(nameInput, imgCount, actions);
+    card.append(thumbDiv, fields);
+    list.appendChild(card);
+  });
+}
+
 /* ===================== OUTFITS ===================== */
 function renderOutfitGrid(){
   const grid = document.getElementById('outfitGrid');
@@ -739,6 +906,7 @@ function openOutfitBoard(outfitId){
     document.getElementById('o_delete').onclick = ()=>{
       if(confirm('Delete this outfit board?')){
         DATA.outfits = DATA.outfits.filter(o=>o.id!==outfit.id);
+        autosave();
         closeModal();
         renderOutfitGrid();
       }
@@ -749,6 +917,7 @@ function openOutfitBoard(outfitId){
     outfit.name = document.getElementById('o_name').value.trim() || 'Untitled outfit';
     outfit.modified = nowISO();
     if(isNew) DATA.outfits.push(outfit);
+    autosave();
     closeModal();
     renderOutfitGrid();
   };
@@ -842,8 +1011,12 @@ function doOpen(){
         if(!obj.items){ alert('This file does not look like a wardrobe export.'); return; }
         DATA.items = obj.items || [];
         DATA.outfits = obj.outfits || [];
+        // preserve inbox — don't wipe staged shares when loading an export
+        DATA.inbox = DATA.inbox || [];
+        autosave();
         renderItemGrid();
         renderOutfitGrid();
+        renderInbox();
         renderAboutStats();
         alert('Loaded: '+(obj._meta? obj._meta.exportedAtHuman : 'unknown date'));
       }catch(err){
@@ -915,13 +1088,14 @@ function setupBookmarklet(){
 
 /* ===================== TABS ===================== */
 function showTab(name){
-  ['items','outfits','bookmarklet','about'].forEach(t=>{
+  ['items','inbox','outfits','bookmarklet','about'].forEach(t=>{
     document.getElementById('tab-'+t).style.display = (t===name?'':'none');
   });
   document.querySelectorAll('nav.tabs button').forEach(b=>{
     b.classList.toggle('active', b.dataset.tab===name);
   });
   if(name==='about') renderAboutStats();
+  if(name==='inbox') renderInbox();
 }
 
 /* ===================== WIRE UP ===================== */
@@ -943,26 +1117,22 @@ document.getElementById('searchBox').addEventListener('input', (e)=>{
 });
 
 setupBookmarklet();
-renderItemGrid();
-renderOutfitGrid();
 
-/* register service worker (required for installability + share target interception) */
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('SW registration failed', err));
-}
-
-/* check for bookmarklet handoff via URL hash (legacy fallback path) */
-(function checkHashHandoff(){
-  if(location.hash && location.hash.startsWith('#wardrobe-import=')){
-    try{
-      const urls = JSON.parse(decodeURIComponent(location.hash.replace('#wardrobe-import=','')));
-      if(Array.isArray(urls) && urls.length){
-        pendingBookmarkletImages = urls;
-        openItemEditor(null);
-      }
-    }catch(e){ console.warn('bad handoff hash', e); }
+// Autoload saved data before rendering anything, then check for share handoff
+(async ()=>{
+  await autoload();
+  renderItemGrid();
+  renderOutfitGrid();
+  updateInboxBadge();
+  // Service worker registration and share handoff check happen after data is loaded
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('SW registration failed', err));
   }
+  checkHashHandoff();
+  await checkShareHandoff();
 })();
+
+
 
 /* check for Android share-target handoff via IndexedDB (set by share-handler.html) */
 /* ---- IndexedDB helpers for share queue ---- */
@@ -1000,6 +1170,19 @@ async function drainShareQueue(){
   });
 }
 
+function checkHashHandoff(){
+  if(location.hash && location.hash.startsWith('#wardrobe-import=')){
+    try{
+      const urls = JSON.parse(decodeURIComponent(location.hash.replace('#wardrobe-import=','')));
+      if(Array.isArray(urls) && urls.length){
+        DATA.inbox.push({id:uid(), images:[], sourceUrl:'', name:'', receivedAt:nowISO(), pendingUrls:urls});
+        autosave();
+        showTab('inbox');
+      }
+    }catch(e){ console.warn('bad handoff hash', e); }
+  }
+}
+
 async function checkShareHandoff(){
   const params = new URLSearchParams(location.search);
   if(params.get('from') !== 'share') return;
@@ -1023,25 +1206,32 @@ async function checkShareHandoff(){
     const firstTitle = (payloads.find(p=>p.title)||{}).title || '';
 
     if(allImages.length){
-      openItemEditor(null);
-      setTimeout(()=>{
-        window.dispatchEvent(new CustomEvent('wardrobe-share-images', {detail: allImages}));
-      }, 150);
+      // Add to inbox as a staging entry
+      DATA.inbox.push({
+        id: uid(),
+        images: allImages,
+        sourceUrl: firstUrl || '',
+        name: firstTitle || '',
+        receivedAt: nowISO()
+      });
+      autosave();
+      showTab('inbox');
     } else if(firstUrl){
-      // Shared a webpage link with no image — open editor with URL pre-filled in notes
-      openItemEditor(null);
-      setTimeout(()=>{
-        const notesEl = document.getElementById('f_notes');
-        const nameEl = document.getElementById('f_name');
-        if(nameEl && firstTitle) nameEl.value = firstTitle;
-        if(notesEl) notesEl.value = firstUrl;
-      }, 150);
+      // Shared a webpage link with no images — add a placeholder inbox entry with URL
+      DATA.inbox.push({
+        id: uid(),
+        images: [],
+        sourceUrl: firstUrl,
+        name: firstTitle || '',
+        receivedAt: nowISO()
+      });
+      autosave();
+      showTab('inbox');
     }
   }catch(err){
     console.warn('share handoff read failed', err);
   }
 }
-checkShareHandoff();
 </script>
 </body>
 </html>
